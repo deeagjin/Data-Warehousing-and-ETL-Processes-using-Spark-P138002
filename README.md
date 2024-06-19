@@ -41,7 +41,6 @@ print(iris_df.columns)
 ![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/0d23a702-63de-4ed5-a311-0b00a9ea6884)
 
 ### Convert String Labels to Numeric Using StringIndexer, Splitting dataset, Assemble features for Classifier
-
 ```python
 # Convert string labels to numeric using StringIndexer
 indexer = StringIndexer(inputCol="Species", outputCol="indexedLabel")
@@ -95,60 +94,53 @@ print("- impurity: ", best_impurity)
 ```
 ![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/72bd7658-548e-4dbb-b213-49f1e91d0af4)
 
+### Make predictions and evaluation of model
 ```python
+predictions = cv_model.transform(testing_data)
 
+# Evaluate the model
+accuracy = evaluator.evaluate(predictions)
+precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
+recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
+f1 = evaluator.evaluate(predictions, {evaluator.metricName: "f1"})
 
-
-### Split the Dataset into Training and Testing Sets
-```python
-# Index the labels
-indexer = StringIndexer(inputCol="Species", outputCol="indexedLabel")
-indexed_df = indexer.fit(iris).transform(iris)
-
-# Assemble features
-from pyspark.ml.feature import VectorAssembler
-
-assembler = VectorAssembler(inputCols=["SepalLengthCm", "SepalWidthCm", "PetalLengthCm", "PetalWidthCm"], outputCol="features")
-final_df = assembler.transform(indexed_df)
-
-# Split the data
-train_df, test_df = final_df.randomSplit([0.8, 0.2], seed=42)
+print("\nMetrics:")
+print("Accuracy: %g" % accuracy)
+print("Precision: %g" % precision)
+print("Recall: %g" % recall)
+print("F1-Score: %g" % f1)
 ```
-### Select a Classification Algorithm
+![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/6e71ed73-d79a-4e67-bea8-9d5970031d2a)
+
+### Output
 ```python
-from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml import Pipeline
+# Convert numeric predictions back to species names
+labelConverter = IndexToString(inputCol="prediction", outputCol="predictedSpecies", labels=indexer_model.labels)
+predictions = labelConverter.transform(predictions)
 
-# Initialize the Decision Tree model
-dt = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="features")
-
-# Create a Pipeline
-pipeline = Pipeline(stages=[dt])
+# Show top 20 predictions with species names and individual features
+predictions.select(*(feature_columns + ["indexedLabel", "predictedSpecies"])).show(20)
 ```
+![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/a583b417-1923-4ffb-8737-e1f2de873df6)
 
-### Employ Cross-Validation and Grid Search to Fine-Tune Hyperparameters
+### Confusion Matrix
 ```python
-# Define the parameter grid
-paramGrid = ParamGridBuilder() \
-    .addGrid(dt.maxDepth, [2, 3, 4, 5]) \
-    .addGrid(dt.impurity, ['gini', 'entropy']) \
-    .build()
+# Extract true labels and predicted labels
+y_true = predictions.select("indexedLabel").rdd.flatMap(lambda x: x).collect()
+y_pred = predictions.select("prediction").rdd.flatMap(lambda x: x).collect()
 
-# Define the evaluator
-evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+# Create confusion matrix
+conf_matrix = pd.crosstab(pd.Series(y_true, name='Actual'), pd.Series(y_pred, name='Predicted'))
 
-# Define cross-validator
-crossval = CrossValidator(estimator=pipeline,
-                          estimatorParamMaps=paramGrid,
-                          evaluator=evaluator,
-                          numFolds=5)
+# Rename columns and index to species names
+label_to_species = {i: label for i, label in enumerate(indexer_model.labels)}
+conf_matrix.columns = [label_to_species[c] for c in conf_matrix.columns]
+conf_matrix.index = [label_to_species[i] for i in conf_matrix.index]
 
-# Run cross-validation, and choose the best set of parameters.
-cv_model = crossval.fit(train_df)
+print("\nConfusion Matrix:")
+print(conf_matrix)
+
+# Stop Spark Context
+sc.stop()
 ```
-
-
-
-
-
-
+![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/8417262f-4045-48c8-8df7-f505302201cc)
