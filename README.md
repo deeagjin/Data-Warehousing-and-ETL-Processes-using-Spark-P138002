@@ -94,6 +94,15 @@ print("- impurity: ", best_impurity)
 ```
 ![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/72bd7658-548e-4dbb-b213-49f1e91d0af4)
 
+### Insights
+- maxDepth: 2. The maxDepth parameter defines the maximum depth of the decision tree.
+- Explanation: A depth of 2 means the tree will have at most two levels of decision nodes between the root (starting node) and the leaf nodes (final nodes). In simpler terms, the decision tree will make at most two splits to classify an instance.
+Implications: A shallower tree is often less complex and is less likely to overfit the training data. Overfitting occurs when the model captures noise in the training data rather than the underlying pattern, which can lead to poor performance on new, unseen data. In this case, the optimal depth of 2 suggests that a simpler model was better at generalizing from the training data to the test data.
+
+- impurity: "gini". The impurity parameter specifies the function used to measure the quality of a split at each node of the tree.
+- Explanation: The "gini" impurity measure calculates the probability of a randomly chosen element being incorrectly classified if it was randomly labeled according to the distribution of labels in the subset. It is calculated as is the probability of an element being classified into a particular class.
+- Implications: Choosing "gini" as the impurity measure means that the decision tree will make splits that try to maximize the purity of the nodes. The "gini" index is commonly used because it is efficient to compute and effective at finding good splits. In this case, the use of "gini" suggests that it provided the best balance between computational efficiency and classification accuracy for this particular dataset.
+
 ### Make predictions and evaluation of model
 ```python
 predictions = cv_model.transform(testing_data)
@@ -123,6 +132,20 @@ predictions.select(*(feature_columns + ["indexedLabel", "predictedSpecies"])).sh
 ```
 ![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/a583b417-1923-4ffb-8737-e1f2de873df6)
 
+### Insights
+- Accuracy
+- Accuracy serves as an overall measure of the model's correctness in classifying instances. With an accuracy score of 97.22%, it indicates that the decision tree correctly predicted the species for 97.22% of the instances in the test dataset. This high accuracy suggests that the model is robust and effective in distinguishing between different species of iris flowers based on their sepal and petal dimensions.
+
+- Precision
+- Precision measures the proportion of true positive predictions out of all positive predictions made by the model. At 97.40%, the precision score highlights the model's ability to correctly identify instances of a specific iris species when it predicts them as such. This metric is crucial in scenarios where correctly identifying positive instances is paramount, minimizing false positives.
+
+- Recall
+- Recall (or sensitivity) assesses the model's capability to correctly identify all positive instances out of the actual positives in the dataset. Achieving a recall score of 97.22% indicates that the model effectively captured a large proportion of actual instances of each iris species. High recall is particularly important when missing positive instances could lead to significant consequences.
+
+- F1-score
+- F1-score provides a balanced measure by considering both precision and recall. With an F1-score of 97.20%, the decision tree model demonstrates a harmonious blend of precision and recall. This score is pivotal in applications where achieving a balance between minimizing false positives and false negatives is crucial for accurate predictions.
+
+
 ### Confusion Matrix
 ```python
 # Extract true labels and predicted labels
@@ -144,3 +167,14 @@ print(conf_matrix)
 sc.stop()
 ```
 ![image](https://github.com/deeagjin/P138002_Assignment3_DataManagement/assets/152348898/8417262f-4045-48c8-8df7-f505302201cc)
+
+### Insights
+The confusion matrix above summarizes the performance of a machine learning model trained to classify Iris flowers into three species: Iris-setosa, Iris-versicolor, and Iris-virginica. Each row represents the instances of a true (actual) class, while each column represents the instances predicted by the model for that class.
+
+In this specific confusion matrix:
+
+- Iris-setosa was predicted correctly for all instances (10 out of 10). There were no instances where Iris-setosa was incorrectly classified as another species.
+
+- Iris-versicolor was also predicted correctly for all instances (15 out of 15). Similar to Iris-setosa, there were no misclassifications of Iris-versicolor as another species.
+
+- Iris-virginica shows a slightly different pattern. Out of 11 instances, 10 were correctly classified as Iris-virginica. However, there was 1 instance where Iris-virginica was misclassified as Iris-versicolor.
