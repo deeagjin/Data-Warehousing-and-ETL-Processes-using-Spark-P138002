@@ -1,0 +1,110 @@
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import SQLContext
+from pyspark.ml.feature import StringIndexer, VectorAssembler, IndexToString
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml import Pipeline
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+import pandas as pd
+
+# Initialize Spark Context
+conf = SparkConf().setAppName("Iris Classification")
+sc = SparkContext(conf=conf)
+sqlContext = SQLContext(sc)
+
+# Load the Iris dataset from HDFS
+iris_path = "/user/maria_dev/nazmi/iris2.csv"
+iris_df = sqlContext.read.csv(iris_path, header=True, inferSchema=True)
+
+# Print top 10 rows
+print("Top 10 rows of iris:")
+iris_df.show(10)
+
+# Check the columns in the DataFrame
+print(iris_df.columns)
+
+# Convert string labels to numeric using StringIndexer
+indexer = StringIndexer(inputCol="Species", outputCol="indexedLabel")
+indexer_model = indexer.fit(iris_df)
+indexed_df = indexer_model.transform(iris_df)
+
+# Split the data
+(training_data, testing_data) = indexed_df.randomSplit([0.7, 0.3], seed=42)
+
+# Assemble features into a single vector for the classifier
+feature_columns = ["SepalLengthCm", "SepalWidthCm", "PetalLengthCm", "PetalWidthCm"]
+assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
+
+# Initialize Decision Tree Classifier
+dt_classifier = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="features")
+
+# Create a pipeline with assembler and classifier
+pipeline = Pipeline(stages=[assembler, dt_classifier])
+
+# Create a ParamGrid for Grid Search
+paramGrid = (ParamGridBuilder()
+             .addGrid(dt_classifier.maxDepth, [2, 4, 6, 8])
+             .addGrid(dt_classifier.impurity, ["gini", "entropy"])
+             .build())
+
+# Create CrossValidator
+evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+crossval = CrossValidator(estimator=pipeline,
+                          estimatorParamMaps=paramGrid,
+                          evaluator=evaluator,
+                          numFolds=5)
+
+# Run cross-validation, and choose the best set of parameters.
+cv_model = crossval.fit(training_data)
+
+# Get best model from cross-validation
+best_model = cv_model.bestModel
+
+# Get best model's parameters
+best_maxDepth = best_model.stages[-1].getOrDefault('maxDepth')
+best_impurity = best_model.stages[-1].getOrDefault('impurity')
+
+# Print best parameters
+print("Best Model Hyperparameters:")
+print("- maxDepth: ", best_maxDepth)
+print("- impurity: ", best_impurity)
+
+# Make predictions on the testing data
+predictions = cv_model.transform(testing_data)
+
+# Evaluate the model
+accuracy = evaluator.evaluate(predictions)
+precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
+recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
+f1 = evaluator.evaluate(predictions, {evaluator.metricName: "f1"})
+
+print("\nMetrics:")
+print("Accuracy: %g" % accuracy)
+print("Precision: %g" % precision)
+print("Recall: %g" % recall)
+print("F1-Score: %g" % f1)
+
+# Convert numeric predictions back to species names
+labelConverter = IndexToString(inputCol="prediction", outputCol="predictedSpecies", labels=indexer_model.labels)
+predictions = labelConverter.transform(predictions)
+
+# Show top 20 predictions with species names and individual features
+predictions.select(*(feature_columns + ["indexedLabel", "predictedSpecies"])).show(20)
+
+# Extract true labels and predicted labels
+y_true = predictions.select("indexedLabel").rdd.flatMap(lambda x: x).collect()
+y_pred = predictions.select("prediction").rdd.flatMap(lambda x: x).collect()
+
+# Create confusion matrix
+conf_matrix = pd.crosstab(pd.Series(y_true, name='Actual'), pd.Series(y_pred, name='Predicted'))
+
+# Rename columns and index to species names
+label_to_species = {i: label for i, label in enumerate(indexer_model.labels)}
+conf_matrix.columns = [label_to_species[c] for c in conf_matrix.columns]
+conf_matrix.index = [label_to_species[i] for i in conf_matrix.index]
+
+print("\nConfusion Matrix:")
+print(conf_matrix)
+
+# Stop Spark Context
+sc.stop()
